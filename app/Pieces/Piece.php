@@ -2,35 +2,56 @@
 
 namespace App\Pieces;
 
+use App\Models\Piece as ModelsPiece;
+use Exception;
+use ReflectionClass;
+
 abstract class Piece {
     const COLOR_WHITE = 0;
     const COLOR_BLACK = 1;
 
-    protected string $image;
-    private int $posX;
-    private int $posY;
+    private ModelsPiece $model;
+    protected string $image = '1';
     private int $color;
-    private bool $isAlive = true;
-
-    private $moves;
 
     public function getPosX() : int {
-        return $this->posX;
+        return $this->model->pos_x;
     }
 
     public function getPosY() : int {
-        return $this->posY;
+        return $this->model->pos_x;
     }
 
-    public function __construct(int $color)
+    public function init(int $gameId, int $userId, int $color, int $startPosX, int $startPosY) : array
     {
         $this->color = $color;
+
+        $this->model = ModelsPiece::create([
+            'pos_x' => $startPosX,
+            'pos_y' => $startPosY,
+            'color' => $this->color,
+            'game_id' => $gameId,
+            'user_id' => $userId,
+            'type' => (new ReflectionClass($this))->getShortName()
+        ]);
+
+        $pieceExportData = array_intersect_key($this->model->toArray(), array_flip(['pos_x', 'pos_y', 'color', 'type']));
+        $pieceExportData['image'] = $this->image;
+
+        return $pieceExportData;
     }
 
     public function getMoves() : array {
-        $this->moves = $this->getPieceMoves();
+        return $this->getPieceMoves();
+    }
 
-        return $this->moves;
+    public function canMove(int $posX, int $posY) : bool {
+        foreach($this->getMoves() as $move) {
+            if ($posX === $move['x'] && $posY === $move['y'])
+                return true;
+        }
+
+        return false;
     }
 
     /**
@@ -43,13 +64,20 @@ abstract class Piece {
      *
      * @return array Piece position after move
      */
-    public function move(int $move) : array {
-        $this->posX = $this->moves[$move]['x'];
-        $this->posY = $this->moves[$move]['y'];
+    public function move(int $posX, int $posY) : array {
+        if (!$this->canMove($posX, $posY))
+            throw new Exception('Can\'t move to this cell.');
+
+        $this->model->update([
+            'pos_x' => $posX,
+            'pos_y' => $posY
+        ]);
+
+        $this->model->fresh();
 
         return [
-            'x' => $this->posX,
-            'y' => $this->posY
+            'x' => $this->model->pos_x,
+            'y' => $this->model->pos_y
         ];
     }
 }

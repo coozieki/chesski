@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Classes\Game;
 
 class HomeController extends Controller
 {
@@ -23,6 +23,8 @@ class HomeController extends Controller
      */
     public function index()
     {
+        $game = new Game(1, 2);
+        dd($game->getInitialPiecesResponse());
         return view('home');
     }
 }
