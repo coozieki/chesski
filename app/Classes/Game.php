@@ -89,7 +89,7 @@ class Game {
         foreach($this->startPositions as $color=>$pieces) {
             foreach($pieces as $piece=>$positions) {
                 foreach($positions as $position)
-                    $this->pieces[$color][] = (new $piece())->init($this->model->id, $this->users[$color], $color, $position[0], $position[1]);
+                    $this->pieces[] = (new $piece())->init($this->model->id, $this->users[$color], $color, $position[0], $position[1]);
             }
         }
     }

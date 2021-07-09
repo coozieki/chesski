@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Classes\Game;
+use Illuminate\Http\Request;
 
 class HomeController extends Controller
 {
@@ -16,15 +17,25 @@ class HomeController extends Controller
         $this->middleware('auth');
     }
 
+    public function home()
+    {
+        return view('home');
+    }
+
     /**
      * Show the application dashboard.
      *
      * @return \Illuminate\Contracts\Support\Renderable
      */
-    public function index()
+    public function start()
     {
         $game = new Game(1, 2);
-        dd($game->getInitialPiecesResponse());
-        return view('home');
+        return $game->getInitialPiecesResponse();
+    }
+
+    public function move(Request $request)
+    {
+        $piece = new ("App\\Pieces\\" . ucfirst($request->type))($request->id);
+        return response()->json($piece->move($request->x, $request->y));
     }
 }
