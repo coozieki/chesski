@@ -9,11 +9,23 @@ class Pawn extends Piece {
     {
         $result = [];
         $pieces = ModelPiece::where('game_id', $this->model->game_id)->get();
-        if ($this->model->color == Piece::COLOR_WHITE) {
-            $asd = $pieces->where('pos_x', $this->model->pos_x)->where('pos_y', $this->model->pos_y + 1);
-            if (!$pieces->where('pos_x', $this->model->pos_x)->where('pos_y', $this->model->pos_y + 1)->count())
-                $result[] = ['x' => $this->model->pos_x, 'y' => $this->model->pos_y + 1];
-        }
+
+        $px = $this->model->pos_x;
+        $py = $this->model->pos_y;
+        $clr = $this->model->color;
+
+        if ($clr == Piece::COLOR_WHITE)
+            $incY = 1;
+        else
+            $incY = -1;
+
+        if (!$pieces->where('pos_x', $px)->where('pos_y', $py + $incY)->count() && !$this->isOutOfField($px, $py + $incY))
+            $result[] = ['x' => $px, 'y' => $py + $incY];
+
+        foreach([1, -1] as $incX)
+            if ($pieces->where('pos_x', $px + $incX)->where('pos_y', $py + $incY)->where('color', $clr == Piece::COLOR_WHITE ? Piece::COLOR_BLACK : Piece::COLOR_WHITE)->count() && !$this->isOutOfField($px + $incX, $py + $incY))
+                $result[] = ['x' => $px + $incX, 'y' => $py + $incY];
+
         return $result;
     }
 }

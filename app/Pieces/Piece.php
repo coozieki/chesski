@@ -2,8 +2,8 @@
 
 namespace App\Pieces;
 
+use App\Classes\GameType;
 use App\Models\Piece as ModelsPiece;
-use Exception;
 use ReflectionClass;
 
 abstract class Piece {
@@ -11,9 +11,8 @@ abstract class Piece {
     const COLOR_BLACK = 1;
 
     protected ModelsPiece $model;
+    protected GameType $gameType;
     protected string $image = '1';
-    protected int $color;
-
 
     public function __construct(int $id = null)
     {
@@ -43,7 +42,7 @@ abstract class Piece {
     }
 
     public function getPosY() : int {
-        return $this->model->pos_x;
+        return $this->model->pos_y;
     }
 
     public function getMoves() : array {
@@ -73,10 +72,15 @@ abstract class Piece {
         if (!$this->canMove($posX, $posY))
             return [];
 
+        $piece = ModelsPiece::where('pos_x', $posX)->where('pos_y', $posY)->where('game_id', $this->model->game_id)->first();
+        if ($piece)
+            $piece->delete();
+
         $this->model->update([
             'pos_x' => $posX,
             'pos_y' => $posY
         ]);
+
 
         $this->model->fresh();
 
@@ -88,5 +92,17 @@ abstract class Piece {
 
     private function getImage() : string {
         return "/img/" . strtolower((new ReflectionClass($this))->getShortName()) . "_{$this->model->color}.png";
+    }
+
+    protected function getGameType() : GameType {
+        if (!$this->gameType) {
+            $this->model->load('game');
+            $this->gameType = GameType::getInstanceByTypeName($this->model->game->type);
+        }
+        return $this->gameType;
+    }
+
+    protected function isOutOfField(int $posX, int $posY) : bool {
+        return !(($posX >= 1) && ($posX <= $this->getGameType()->getFieldLength()) && ($posY >= 1) && ($posY <= $this->getGameType()->getFieldLength()));
     }
 }

@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Classes\Game;
+use App\Classes\GameType;
+use App\Classes\OrdinaryGameType;
+use App\Models\Piece;
 use Illuminate\Http\Request;
 
 class HomeController extends Controller
@@ -29,7 +32,7 @@ class HomeController extends Controller
      */
     public function start()
     {
-        $game = new Game(1, 2);
+        $game = new Game(1, 2, new OrdinaryGameType());
         return $game->getInitialPiecesResponse();
     }
 
@@ -37,5 +40,11 @@ class HomeController extends Controller
     {
         $piece = new ("App\\Pieces\\" . ucfirst($request->type))($request->id);
         return response()->json($piece->move($request->x, $request->y));
+    }
+
+    public function getMoves(Request $request)
+    {
+        $piece = new ("App\\Pieces\\" . ucfirst($request->type))($request->id);
+        return response()->json($piece->getMoves());
     }
 }

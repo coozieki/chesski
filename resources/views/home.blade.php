@@ -81,8 +81,38 @@
                 $(`img`, $cell).attr('src', val.image);
 
                 $('.piece_img_container', $cell).draggable({
+                    start: function(event, ui) {
+                        $(this).css('z-index', '1000');
+                        $.ajax({
+                            url: '/game/moves',
+                            method: 'GET',
+                            data: {
+                                id: val.id,
+                                type: val.type,
+                                _token: "{{ csrf_token() }}"
+                            },
+                            success: response => {
+                                response.forEach(val => {
+                                    $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).css('background-color', '#EDB75E');
+                                });
+                            },
+                            error: response => {
+
+                            },
+                            complete: response => {
+
+                            }
+                        });
+                    },
                     stop: function(event, ui) {
+                        $(this).css('z-index', '100');
                         let $cellUnderCursor = $(document.elementsFromPoint(event.pageX, event.pageY)).filter('.cell').first();
+                        if (!$cellUnderCursor.length) {
+                            $(this).attr('style', '');
+                            $('.cell').css('background', 'unset');
+                            return;
+                        }
+
                         $.ajax({
                             url: '/game/move',
                             method: 'PATCH',
@@ -102,6 +132,7 @@
                             },
                             complete: response => {
                                 $(this).attr('style', '');
+                                $('.cell').css('background', 'unset');
                             }
                         });
                     }
