@@ -54,9 +54,9 @@ abstract class Piece implements GameObjectInterface {
     }
 
     public function getMoves() : array {
-        $pieces = DB::table('pieces')->where('game_id', $this->model->game_id)->get();
+        $pieces = DB::table('pieces')->where('game_id', $this->model->game_id)->get()->all();
 
-        $moves = $this->getPieceMoves();
+        $moves = $this->getPieceMoves($pieces);
 
         foreach($moves as $index=>$move) {
             if ($this->isCheck($pieces, $move))
@@ -67,22 +67,31 @@ abstract class Piece implements GameObjectInterface {
     }
 
     private function isCheck($pieces, array $move) : bool {
-        $pieces->where('id', $this->model->id)->first()->pos_x = $move['x'];
-        $pieces->where('id', $this->model->id)->first()->pos_y = $move['y'];
-        $enemyPieces = $pieces->where('color', $this->model->color == Piece::COLOR_WHITE ? Piece::COLOR_BLACK : Piece::COLOR_WHITE);
-        $king = $pieces->where('type', 'King')->where('color', $this->model->color)->first();
+        $enemyPieces = [];
+        foreach($pieces as $index=>$piece) {
+            if ($piece->id == $this->model->id) {
+                $pieces[$index]->pos_x = $move['x'];
+                $pieces[$index]->pos_y = $move['y'];
+            }
+            if ($piece->color == ($this->model->color == Piece::COLOR_WHITE ? Piece::COLOR_BLACK : Piece::COLOR_WHITE)) {
+                $enemyPieces[] = $piece;
+            }
+            if ($piece->type == 'King' && $piece->color == $this->model->color) {
+                $king = $piece;
+            }
+        }
 
         $checkStraightHor = function ($i) use ($king, $enemyPieces, $pieces) {
-            if ($enemyPieces->where('pos_x', $i)->where('pos_y', $king->pos_y)->whereIn('type', ['Queen', 'Rook'])->count())
+            if ($this->checkHasPiecesAtCell($enemyPieces, $i, $king->pos_y, ['Queen', 'Rook']))
                 return 1;
-            if ($pieces->where('pos_x', $i)->where('pos_y', $king->pos_y)->count())
+            if ($this->checkHasPiecesAtCell($pieces, $i, $king->pos_y))
                 return 2;
             return 0;
         };
         $checkStraightVert = function ($i) use ($king, $enemyPieces, $pieces) {
-            if ($enemyPieces->where('pos_x', $king->pos_x)->where('pos_y', $i)->whereIn('type', ['Queen', 'Rook'])->count())
+            if ($this->checkHasPiecesAtCell($enemyPieces, $king->pos_x, $i, ['Queen', 'Rook']))
                 return 1;
-            if ($pieces->where('pos_x', $king->pos_x)->where('pos_y', $i)->count())
+            if ($this->checkHasPiecesAtCell($pieces, $king->pos_x, $i))
                 return 2;
             return 0;
         };
@@ -115,26 +124,26 @@ abstract class Piece implements GameObjectInterface {
                 break;
         }
         $checkDiag1 = function($i) use ($king, $pieces, $enemyPieces) {
-            if ($enemyPieces->where('pos_x', $i)->where('pos_y', $king->pos_y + $i - $king->pos_x)->whereIn('type', ['Queen', 'Bishop'])->count())
+            if ($this->checkHasPiecesAtCell($enemyPieces, $i, $king->pos_y + $i - $king->pos_x, ['Queen', 'Bishop']))
                 return 1;
 
-            if ($pieces->where('pos_x', $i)->where('pos_y', $king->pos_y + $i - $king->pos_x)->count())
+            if ($this->checkHasPiecesAtCell($pieces, $i, $king->pos_y + $i - $king->pos_x))
                 return 2;
 
             return 0;
         };
         $checkDiag2 = function($i) use ($king, $pieces, $enemyPieces) {
-            if ($enemyPieces->where('pos_x', $i)->where('pos_y', $king->pos_y - $i + $king->pos_x)->whereIn('type', ['Queen', 'Bishop'])->count())
+            if ($this->checkHasPiecesAtCell($enemyPieces, $i, $king->pos_y - $i + $king->pos_x, ['Queen', 'Bishop']))
                 return 1;
 
-            if ($pieces->where('pos_x', $i)->where('pos_y', $king->pos_y - $i + $king->pos_x)->count())
+            if ($this->checkHasPiecesAtCell($pieces, $i, $king->pos_y - $i + $king->pos_x))
                 return 2;
 
             return 0;
         };
 
         foreach([1, -1] as $i) {
-            if ($enemyPieces->where('pos_x', $king->pos_x + $i)->where('pos_y', $king->pos_y+1)->whereIn('type', ['Queen', 'Rook', 'Pawn', 'Bishop'])->count())
+            if ($this->checkHasPiecesAtCell($enemyPieces, $king->pos_x + $i, $king->pos_y+1, ['Queen', 'King', 'Pawn', 'Bishop']))
                 return true;
         }
 
@@ -167,6 +176,18 @@ abstract class Piece implements GameObjectInterface {
                 break;
         }
 
+        return false;
+    }
+
+    protected function checkHasPiecesAtCell($array, $posX, $posY, $type = [], $color = null) {
+        foreach($array as $elem) {
+            if ($type != [] && !in_array($elem->type, $type))
+                continue;
+            if ($color!==null && $elem->color != $color)
+                continue;
+            if ($elem->pos_x == $posX && $elem->pos_y == $posY)
+                return true;
+        }
         return false;
     }
 

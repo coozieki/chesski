@@ -14,6 +14,14 @@
             cursor: pointer;
         }
 
+        .field .row:nth-child(even) .cell:nth-child(odd) {
+            background-color: #00000033
+        }
+
+        .field .row:nth-child(odd) .cell:nth-child(even) {
+            background-color: #00000033
+        }
+
         .field .piece_img_container {
             position: relative;
             user-select: none;
@@ -32,6 +40,30 @@
             object-fit: cover;
             height: 100%;
             width: 100%;
+        }
+
+        .background_kill {
+            background-color: #F67874 !important;
+        }
+
+        .background_kill__hover {
+            background-color: #e09895 !important;
+        }
+
+        .background_move {
+            background-color: #EDB75E !important;
+        }
+
+        .background_move__hover {
+            background-color: #f5d49f !important;
+        }
+
+        .background_self {
+            background-color: #EEE9A0 !important;
+        }
+
+        .background_self__hover {
+            background-color: #f3f0c9 !important;
         }
 
         .border-top {
@@ -71,6 +103,7 @@
                 $(`img`, $cell).attr('src', val.image);
 
                 $('.piece_img_container', $cell).draggable({
+                    cursorAt: {left: 40, top: 40},
                     start: function(event, ui) {
                         $(this).css('z-index', '1000');
                         $.ajax({
@@ -87,9 +120,9 @@
                                     $cellToMove = $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`);
 
                                     if ($cellToMove.find('.piece_img_container').length>0) {
-                                        $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).css('background-color', '#F67874');
+                                        $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).addClass('background_kill');
                                     } else {
-                                        $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).css('background-color', '#EDB75E');
+                                        $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).addClass('background_move');
                                     }
 
                                 });
@@ -98,7 +131,7 @@
 
                             },
                             complete: response => {
-                                $(this).parents('.cell').first().css('background-color', '#EEE9A0');
+                                $(this).parents('.cell').first().addClass('background_self');
                             }
                         });
                     },
@@ -107,7 +140,9 @@
                         let $cellUnderCursor = $(document.elementsFromPoint(event.pageX, event.pageY)).filter('.cell').first();
                         if (!$cellUnderCursor.length) {
                             $(this).attr('style', '');
-                            $('.cell').css('background', 'unset');
+                                ['background_kill', 'background_move', 'background_self'].forEach(val => {
+                                    $(`.${val}`).removeClass(val).removeClass(val+"__hover");
+                                });
                             return;
                         }
 
@@ -130,7 +165,9 @@
                             },
                             complete: response => {
                                 $(this).attr('style', '');
-                                $('.cell').css('background', 'unset');
+                                ['background_kill', 'background_move', 'background_self'].forEach(val => {
+                                    $(`.${val}`).removeClass(val).removeClass(val+"__hover");
+                                });
                             }
                         });
                     }
@@ -141,6 +178,15 @@
         fetch('/game/start')
             .then(r => r.json())
             .then(r => initGame(r));
+
+        $('body').delegate('.field', 'mousemove', function(event) {
+            let $cellUnderCursor = $(document.elementsFromPoint(event.pageX, event.pageY)).filter('.cell').first();
+            ['background_move', 'background_kill', 'background_self'].forEach(val => {
+                $(`.${val}__hover`).removeClass(`${val}__hover`);
+                if ($cellUnderCursor.hasClass(val))
+                    $cellUnderCursor.addClass(`${val}__hover`);
+            });
+        });
     </script>
 @endpush
 

@@ -9,31 +9,31 @@ class Rook extends Piece {
     {
         $result = [];
         if (!$pieces)
-            $pieces = ModelPiece::where('game_id', $this->model->game_id)->get();
+            $pieces = ModelPiece::where('game_id', $this->model->game_id)->get()->all();
 
         $px = $this->model->pos_x;
         $py = $this->model->pos_y;
         $clr = $this->model->color;
 
         $checkHor = function($i) use ($pieces, &$result, $py, $clr) {
-            if ($pieces->where('pos_x', $i)->where('pos_y', $py)->where('color', $clr)->count())
+            if ($this->checkHasPiecesAtCell($pieces, $i, $py, [], $clr))
                 return true;
 
             $result[] = ['x'=>$i, 'y'=>$py];
 
-            if ($pieces->where('pos_x', $i)->where('pos_y', $py)->where('color', $clr == Piece::COLOR_WHITE ? Piece::COLOR_BLACK : Piece::COLOR_WHITE)->count())
+            if ($this->checkHasPiecesAtCell($pieces, $i, $py, [], $clr == Piece::COLOR_WHITE ? Piece::COLOR_BLACK : Piece::COLOR_WHITE))
                 return true;
 
             return false;
         };
 
         $checkVert = function($i) use ($pieces, &$result, $px, $clr) {
-            if ($pieces->where('pos_x', $px)->where('pos_y', $i)->where('color', $clr)->count())
+            if ($this->checkHasPiecesAtCell($pieces, $px, $i, [], $clr))
                 return true;
 
             $result[] = ['x'=>$px, 'y'=>$i];
 
-            if ($pieces->where('pos_x', $px)->where('pos_y', $i)->where('color', $clr == Piece::COLOR_WHITE ? Piece::COLOR_BLACK : Piece::COLOR_WHITE)->count())
+            if ($this->checkHasPiecesAtCell($pieces, $px, $i, [], $clr == Piece::COLOR_WHITE ? Piece::COLOR_BLACK : Piece::COLOR_WHITE))
                 return true;
 
             return false;

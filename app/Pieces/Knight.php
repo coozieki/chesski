@@ -10,7 +10,7 @@ class Knight extends Piece {
     {
         $result = [];
         if (!$pieces)
-            $pieces = DB::table('pieces')->where('game_id', $this->model->game_id)->get();
+            $pieces = DB::table('pieces')->where('game_id', $this->model->game_id)->get()->all();
 
         $px = $this->model->pos_x;
         $py = $this->model->pos_y;
@@ -22,7 +22,7 @@ class Knight extends Piece {
         ];
 
         foreach($possible as $pos) {
-            if (!$this->isOutOfField($pos[0], $pos[1]) && (!$pieces->where('pos_x', $pos[0])->where('pos_y', $pos[1])->where('color', $clr)->count()))
+            if (!$this->isOutOfField($pos[0], $pos[1]) && !$this->checkHasPiecesAtCell($pieces, $pos[0], $pos[1], [], $clr))
                 $result[] = ['x'=>$pos[0], 'y'=>$pos[1]];
         }
 
