@@ -5,13 +5,13 @@ namespace App\Classes;
 use Illuminate\Support\Str;
 use ReflectionClass;
 
-abstract class GameType {
+abstract class GameRules {
     abstract public function getFieldLength() : int;
 
     abstract public function getStartPositions() : array;
 
-    static public function getInstanceByTypeName(string $typeName) : GameType {
-        return new ("App\\Classes\\" . ucfirst($typeName) . "GameType")();
+    static public function getInstanceByTypeName(string $typeName) : GameRules {
+        return new ("App\\Classes\\" . ucfirst($typeName) . "GameRules")();
     }
 
     public function getID() : string {

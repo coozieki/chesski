@@ -9,7 +9,7 @@ use App\Pieces\Piece;
 use App\Pieces\Queen;
 use App\Pieces\Rook;
 
-class OrdinaryGameType extends GameType {
+class OrdinaryGameRules extends GameRules {
     public function getStartPositions(): array
     {
         return [

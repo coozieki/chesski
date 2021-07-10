@@ -3,12 +3,14 @@
 namespace App\Pieces;
 
 use App\Models\Piece as ModelPiece;
+use Illuminate\Support\Facades\DB;
 
 class Pawn extends Piece {
-    protected function getPieceMoves(): array
+    public function getPieceMoves($pieces = null): array
     {
         $result = [];
-        $pieces = ModelPiece::where('game_id', $this->model->game_id)->get();
+        if (!$pieces)
+            $pieces = DB::table('pieces')->where('game_id', $this->model->game_id)->get();
 
         $px = $this->model->pos_x;
         $py = $this->model->pos_y;
@@ -18,6 +20,13 @@ class Pawn extends Piece {
             $incY = 1;
         else
             $incY = -1;
+
+        if ((($py == 2 && $clr == Piece::COLOR_WHITE) || ($py == 7 && $clr == Piece::COLOR_BLACK))
+            && !$pieces->filter(function($val) use ($px, $py, $incY) {
+                return ($val->pos_x == $px && $val->pos_y == $py + 2*$incY)
+                        || ($val->pos_x == $px && $val->pos_y == $py + $incY);
+            })->count())
+            $result[] = ['x' => $px, 'y' => $py + 2*$incY];
 
         if (!$pieces->where('pos_x', $px)->where('pos_y', $py + $incY)->count() && !$this->isOutOfField($px, $py + $incY))
             $result[] = ['x' => $px, 'y' => $py + $incY];

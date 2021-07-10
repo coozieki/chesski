@@ -6,19 +6,9 @@
             margin: 0;
         }
 
-        .table td {
-            height: 70px;
-            width: 70px;
-        }
-
-        .table-bordered td,
-        .table-bordered th {
-            border-color: black;
-        }
-
         .field .cell {
-            width: 50px;
-            height: 50px;
+            width: 80px;
+            height: 80px;
             border-bottom: 1px solid black;
             border-right: 1px solid black;
             cursor: pointer;
@@ -92,15 +82,23 @@
                                 _token: "{{ csrf_token() }}"
                             },
                             success: response => {
+                                response = Object.values(response);
                                 response.forEach(val => {
-                                    $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).css('background-color', '#EDB75E');
+                                    $cellToMove = $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`);
+
+                                    if ($cellToMove.find('.piece_img_container').length>0) {
+                                        $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).css('background-color', '#F67874');
+                                    } else {
+                                        $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).css('background-color', '#EDB75E');
+                                    }
+
                                 });
                             },
                             error: response => {
 
                             },
                             complete: response => {
-
+                                $(this).parents('.cell').first().css('background-color', '#EEE9A0');
                             }
                         });
                     },
@@ -124,7 +122,7 @@
                                 _token: "{{ csrf_token() }}"
                             },
                             success: response => {
-                                if (response.length != 0)
+                                if (response.length !== 0)
                                     $cellUnderCursor.html(this);
                             },
                             error: response => {

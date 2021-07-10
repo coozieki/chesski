@@ -2,32 +2,40 @@
 
 namespace App\Pieces;
 
-use App\Classes\GameType;
+use App\Classes\GameObjectInterface;
+use App\Classes\GameRules;
 use App\Models\Piece as ModelsPiece;
+use Exception;
+use Illuminate\Support\Facades\DB;
 use ReflectionClass;
 
-abstract class Piece {
+abstract class Piece implements GameObjectInterface {
     const COLOR_WHITE = 0;
     const COLOR_BLACK = 1;
 
-    protected ModelsPiece $model;
-    protected GameType $gameType;
+    protected ModelsPiece|null $model = null;
+    protected GameRules|null $gameRules = null;
     protected string $image = '1';
 
-    public function __construct(int $id = null)
+    public function __construct(ModelsPiece|int|null $model = null)
     {
-        if ($id)
-            $this->model = ModelsPiece::find($id);
+        if (is_int($model))
+            $this->model = ModelsPiece::find($model);
+        else if ($model)
+            $this->model = $model;
     }
 
-    public function init(int $gameId, int $userId, int $color, int $startPosX, int $startPosY) : array
+    public function init(array $data) : array
     {
+        if ($this->model)
+            throw new Exception('This piece is already initialized.');
+
         $this->model = ModelsPiece::create([
-            'pos_x' => $startPosX,
-            'pos_y' => $startPosY,
-            'color' => $color,
-            'game_id' => $gameId,
-            'user_id' => $userId,
+            'pos_x' => $data['startPosX'],
+            'pos_y' => $data['startPosY'],
+            'color' => $data['color'],
+            'game_id' => $data['gameId'],
+            'user_id' => $data['userId'],
             'type' => (new ReflectionClass($this))->getShortName()
         ]);
 
@@ -46,7 +54,120 @@ abstract class Piece {
     }
 
     public function getMoves() : array {
-        return $this->getPieceMoves();
+        $pieces = DB::table('pieces')->where('game_id', $this->model->game_id)->get();
+
+        $moves = $this->getPieceMoves();
+
+        foreach($moves as $index=>$move) {
+            if ($this->isCheck($pieces, $move))
+                unset($moves[$index]);
+        }
+
+        return $moves;
+    }
+
+    private function isCheck($pieces, array $move) : bool {
+        $pieces->where('id', $this->model->id)->first()->pos_x = $move['x'];
+        $pieces->where('id', $this->model->id)->first()->pos_y = $move['y'];
+        $enemyPieces = $pieces->where('color', $this->model->color == Piece::COLOR_WHITE ? Piece::COLOR_BLACK : Piece::COLOR_WHITE);
+        $king = $pieces->where('type', 'King')->where('color', $this->model->color)->first();
+
+        $checkStraightHor = function ($i) use ($king, $enemyPieces, $pieces) {
+            if ($enemyPieces->where('pos_x', $i)->where('pos_y', $king->pos_y)->whereIn('type', ['Queen', 'Rook'])->count())
+                return 1;
+            if ($pieces->where('pos_x', $i)->where('pos_y', $king->pos_y)->count())
+                return 2;
+            return 0;
+        };
+        $checkStraightVert = function ($i) use ($king, $enemyPieces, $pieces) {
+            if ($enemyPieces->where('pos_x', $king->pos_x)->where('pos_y', $i)->whereIn('type', ['Queen', 'Rook'])->count())
+                return 1;
+            if ($pieces->where('pos_x', $king->pos_x)->where('pos_y', $i)->count())
+                return 2;
+            return 0;
+        };
+        for($i=$king->pos_x+1;$i<$this->getGameRules()->getFieldLength()+1;$i++) {
+            $check = $checkStraightHor($i);
+            if ($check == 1)
+                return true;
+            else if ($check == 2)
+                break;
+        }
+        for($i=$king->pos_x-1;$i>0;$i--) {
+            $check = $checkStraightHor($i);
+            if ($check == 1)
+                return true;
+            else if ($check == 2)
+                break;
+        }
+        for($i=$king->pos_y+1;$i<$this->getGameRules()->getFieldLength()+1;$i++) {
+            $check = $checkStraightVert($i);
+            if ($check == 1)
+                return true;
+            else if ($check == 2)
+                break;
+        }
+        for($i=$king->pos_y-1;$i>0;$i--) {
+            $check = $checkStraightVert($i);
+            if ($check == 1)
+                return true;
+            else if ($check == 2)
+                break;
+        }
+        $checkDiag1 = function($i) use ($king, $pieces, $enemyPieces) {
+            if ($enemyPieces->where('pos_x', $i)->where('pos_y', $king->pos_y + $i - $king->pos_x)->whereIn('type', ['Queen', 'Bishop'])->count())
+                return 1;
+
+            if ($pieces->where('pos_x', $i)->where('pos_y', $king->pos_y + $i - $king->pos_x)->count())
+                return 2;
+
+            return 0;
+        };
+        $checkDiag2 = function($i) use ($king, $pieces, $enemyPieces) {
+            if ($enemyPieces->where('pos_x', $i)->where('pos_y', $king->pos_y - $i + $king->pos_x)->whereIn('type', ['Queen', 'Bishop'])->count())
+                return 1;
+
+            if ($pieces->where('pos_x', $i)->where('pos_y', $king->pos_y - $i + $king->pos_x)->count())
+                return 2;
+
+            return 0;
+        };
+
+        foreach([1, -1] as $i) {
+            if ($enemyPieces->where('pos_x', $king->pos_x + $i)->where('pos_y', $king->pos_y+1)->whereIn('type', ['Queen', 'Rook', 'Pawn', 'Bishop'])->count())
+                return true;
+        }
+
+        for($i=$king->pos_x+1;$i<$this->getGameRules()->getFieldLength()+1;$i++) {
+            $check = $checkDiag1($i);
+            if ($check == 1)
+                return true;
+            else if ($check == 2)
+                break;
+        }
+        for($i=$king->pos_x-1;$i>0;$i--) {
+            $check = $checkDiag1($i);
+            if ($check == 1)
+                return true;
+            else if ($check == 2)
+                break;
+        }
+        for($i=$king->pos_x+1;$i<$this->getGameRules()->getFieldLength()+1;$i++) {
+            $check = $checkDiag2($i);
+            if ($check == 1)
+                return true;
+            else if ($check == 2)
+                break;
+        }
+        for($i=$king->pos_x-1;$i>0;$i--) {
+            $check = $checkDiag2($i);
+            if ($check == 1)
+                return true;
+            else if ($check == 2)
+                break;
+        }
+
+        return false;
     }
 
     public function canMove(int $posX, int $posY) : bool {
@@ -61,24 +182,23 @@ abstract class Piece {
     /**
      * Get concrete piece moveset
      */
-    abstract protected function getPieceMoves() : array;
+    abstract public function getPieceMoves($pieces = null) : array;
 
     /**
-     * @param int $move Index of last moves from getMoves()
      *
      * @return array Piece position after move
      */
-    public function move(int $posX, int $posY) : array {
-        if (!$this->canMove($posX, $posY))
+    public function update(array $data) : array {
+        if (!$this->canMove($data['posX'], $data['posY']))
             return [];
 
-        $piece = ModelsPiece::where('pos_x', $posX)->where('pos_y', $posY)->where('game_id', $this->model->game_id)->first();
+        $piece = ModelsPiece::where('pos_x', $data['posX'])->where('pos_y', $data['posY'])->where('game_id', $this->model->game_id)->first();
         if ($piece)
             $piece->delete();
 
         $this->model->update([
-            'pos_x' => $posX,
-            'pos_y' => $posY
+            'pos_x' => $data['posX'],
+            'pos_y' => $data['posY']
         ]);
 
 
@@ -94,15 +214,15 @@ abstract class Piece {
         return "/img/" . strtolower((new ReflectionClass($this))->getShortName()) . "_{$this->model->color}.png";
     }
 
-    protected function getGameType() : GameType {
-        if (!$this->gameType) {
+    protected function getGameRules() : GameRules {
+        if (!$this->gameRules) {
             $this->model->load('game');
-            $this->gameType = GameType::getInstanceByTypeName($this->model->game->type);
+            $this->gameRules = GameRules::getInstanceByTypeName($this->model->game->type);
         }
-        return $this->gameType;
+        return $this->gameRules;
     }
 
     protected function isOutOfField(int $posX, int $posY) : bool {
-        return !(($posX >= 1) && ($posX <= $this->getGameType()->getFieldLength()) && ($posY >= 1) && ($posY <= $this->getGameType()->getFieldLength()));
+        return !(($posX >= 1) && ($posX <= $this->getGameRules()->getFieldLength()) && ($posY >= 1) && ($posY <= $this->getGameRules()->getFieldLength()));
     }
 }

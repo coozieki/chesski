@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\HomeController;
+use App\Http\Controllers\GameController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -20,10 +20,10 @@ Route::get('/', function () {
 
 Auth::routes();
 
-Route::get('home', [HomeController::class, 'home'])->name('home');
+Route::get('home', [GameController::class, 'home'])->name('home');
 
 Route::group(['prefix'=>'game', 'as'=>'game.'], function() {
-    Route::get('start', [HomeController::class, 'start']);
-    Route::patch('move', [HomeController::class, 'move']);
-    Route::get('moves', [HomeController::class, 'getMoves']);
+    Route::get('start', [GameController::class, 'start']);
+    Route::patch('move', [GameController::class, 'move']);
+    Route::get('moves', [GameController::class, 'getMoves']);
 });

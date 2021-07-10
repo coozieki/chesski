@@ -5,10 +5,11 @@ namespace App\Pieces;
 use App\Models\Piece as ModelPiece;
 
 class Rook extends Piece {
-    protected function getPieceMoves(): array
+    public function getPieceMoves($pieces = null): array
     {
         $result = [];
-        $pieces = ModelPiece::where('game_id', $this->model->game_id)->get();
+        if (!$pieces)
+            $pieces = ModelPiece::where('game_id', $this->model->game_id)->get();
 
         $px = $this->model->pos_x;
         $py = $this->model->pos_y;
@@ -42,7 +43,7 @@ class Rook extends Piece {
             if ($checkHor($i))
                 break;
 
-        for($i=$px+1; $i<$this->getGameType()->getFieldLength()+1; $i++)
+        for($i=$px+1; $i<$this->getGameRules()->getFieldLength()+1; $i++)
             if ($checkHor($i))
                 break;
 
@@ -50,7 +51,7 @@ class Rook extends Piece {
             if ($checkVert($i))
                 break;
 
-        for($i=$py+1; $i<$this->getGameType()->getFieldLength()+1; $i++)
+        for($i=$py+1; $i<$this->getGameRules()->getFieldLength()+1; $i++)
             if ($checkVert($i))
                 break;
 

@@ -3,12 +3,14 @@
 namespace App\Pieces;
 
 use App\Models\Piece as ModelPiece;
+use Illuminate\Support\Facades\DB;
 
 class Knight extends Piece {
-    protected function getPieceMoves(): array
+    public function getPieceMoves($pieces = null): array
     {
         $result = [];
-        $pieces = ModelPiece::where('game_id', $this->model->game_id)->get();
+        if (!$pieces)
+            $pieces = DB::table('pieces')->where('game_id', $this->model->game_id)->get();
 
         $px = $this->model->pos_x;
         $py = $this->model->pos_y;

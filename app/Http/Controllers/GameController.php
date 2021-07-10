@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Classes\Game;
-use App\Classes\GameType;
-use App\Classes\OrdinaryGameType;
-use App\Models\Piece;
+use App\Classes\Chess;
+use App\Classes\OrdinaryGameRules;
 use Illuminate\Http\Request;
 
-class HomeController extends Controller
+class GameController extends Controller
 {
+    protected string $currentGame = Chess::class;
+
     /**
      * Create a new controller instance.
      *
@@ -32,19 +32,19 @@ class HomeController extends Controller
      */
     public function start()
     {
-        $game = new Game(1, 2, new OrdinaryGameType());
-        return $game->getInitialPiecesResponse();
+        $game = new ($this->currentGame)();
+        return $game->startGame(1, 2, new OrdinaryGameRules());
     }
 
     public function move(Request $request)
     {
-        $piece = new ("App\\Pieces\\" . ucfirst($request->type))($request->id);
-        return response()->json($piece->move($request->x, $request->y));
+        $game = new ($this->currentGame)();
+        return $game->updateObject($request->id, ['posX' => $request->x, 'posY' => $request->y]);
     }
 
     public function getMoves(Request $request)
     {
-        $piece = new ("App\\Pieces\\" . ucfirst($request->type))($request->id);
-        return response()->json($piece->getMoves());
+        $game = new ($this->currentGame)();
+        return $game->getMoves($request->id, []);
     }
 }

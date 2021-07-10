@@ -3,7 +3,7 @@
 namespace App\Pieces;
 
 class Queen extends Piece {
-    protected function getPieceMoves(): array
+    public function getPieceMoves($pieces = null): array
     {
         return [];
     }
