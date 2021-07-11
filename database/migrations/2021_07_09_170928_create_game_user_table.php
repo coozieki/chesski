@@ -17,6 +17,7 @@ class CreateGameUserTable extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete()->cascadeOnUpdate();
             $table->foreignId('game_id')->constrained('games')->cascadeOnDelete()->cascadeOnUpdate();
+            $table->boolean('color');
         });
     }
 

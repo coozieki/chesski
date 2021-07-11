@@ -10,10 +10,10 @@ class Game extends Model
     use HasFactory;
 
     protected $fillable = [
-        'type'
+        'type', 'turn'
     ];
 
     public function users() {
-        return $this->belongsToMany(User::class);
+        return $this->belongsToMany(User::class)->withPivot(['color']);
     }
 }

@@ -20,7 +20,7 @@ Route::get('/', function () {
 
 Auth::routes();
 
-Route::get('home', [GameController::class, 'home'])->name('home');
+Route::get('chess/{id?}', [GameController::class, 'chess'])->name('chess');
 
 Route::group(['prefix'=>'game', 'as'=>'game.'], function() {
     Route::get('start', [GameController::class, 'start']);

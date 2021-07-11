@@ -77,7 +77,68 @@
 
 @push('js')
     <script>
+        var socket;
+        var game_id = Number("{{ $game?->id ?: 0 }}");
+        var initializedWithSocket = false;
+        var currentDraggable;
+
+        $(document).ready(function() {
+            socket = new WebSocket("ws://127.0.0.1:8090");
+
+            socket.onopen = () => {
+                console.log('Соединение установлено');
+                initializedWithSocket = true;
+                socket.send(JSON.stringify({
+                    type: 'init',
+                    game_id: game_id
+                }));
+            }
+
+            socket.onerror = () => {
+                if (!initializedWithSocket)
+                    fetch('/game/start')
+                        .then(r => r.json())
+                        .then(r => initGame(r));
+            }
+
+            socket.onclose = () => {
+                console.log('Соединение закрыто');
+            }
+            socket.onmessage = (event) => {
+                var data = JSON.parse(event.data);
+                if (!data)
+                    return;
+                if (data.type == 'update' || data.type == 'init') {
+                    initGame(data.data);
+                } else if (data.type == 'get_moves') {
+                    if (data.type == 'get_moves') {
+                        showMoves(data.data);
+                        showSelfCell(currentDraggable);
+                    }
+                }
+            }
+        });
+
+        function showMoves(data) {
+            data = Object.values(data);
+            data.forEach(val => {
+                $cellToMove = $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`);
+
+                if ($cellToMove.find('.piece_img_container').length>0) {
+                    $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).addClass('background_kill');
+                } else {
+                    $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).addClass('background_move');
+                }
+
+            });
+        }
+
+        function showSelfCell(element) {
+            $(element).parents('.cell').first().addClass('background_self');
+        }
+
         function initGame(r) {
+            $('.field').remove();
             let $table = $(`<div class="field"></div>`);
             let $tr;
             for(let j=0; j<8; j++) {
@@ -105,35 +166,34 @@
                 $('.piece_img_container', $cell).draggable({
                     cursorAt: {left: 40, top: 40},
                     start: function(event, ui) {
+                        currentDraggable = this;
                         $(this).css('z-index', '1000');
-                        $.ajax({
-                            url: '/game/moves',
-                            method: 'GET',
-                            data: {
-                                id: val.id,
-                                type: val.type,
-                                _token: "{{ csrf_token() }}"
-                            },
-                            success: response => {
-                                response = Object.values(response);
-                                response.forEach(val => {
-                                    $cellToMove = $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`);
+                        if (!initializedWithSocket) {
+                            $.ajax({
+                                url: '/game/moves',
+                                method: 'GET',
+                                data: {
+                                    id: val.id,
+                                    type: val.type,
+                                    _token: "{{ csrf_token() }}"
+                                },
+                                success: response => {
+                                    showMoves(response);
+                                },
+                                error: response => {
 
-                                    if ($cellToMove.find('.piece_img_container').length>0) {
-                                        $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).addClass('background_kill');
-                                    } else {
-                                        $(`.cell[data-x="${val.x}"][data-y="${val.y}"]`).addClass('background_move');
-                                    }
-
-                                });
-                            },
-                            error: response => {
-
-                            },
-                            complete: response => {
-                                $(this).parents('.cell').first().addClass('background_self');
-                            }
-                        });
+                                },
+                                complete: response => {
+                                    showSelfCell(this);
+                                }
+                            });
+                        } else {
+                            socket.send(JSON.stringify({
+                                'type': 'get_moves',
+                                'id': val.id,
+                                user_id: "{{ Auth::id() }}"
+                            }));
+                        }
                     },
                     stop: function(event, ui) {
                         $(this).css('z-index', '100');
@@ -146,38 +206,44 @@
                             return;
                         }
 
-                        $.ajax({
-                            url: '/game/move',
-                            method: 'PATCH',
-                            data: {
+                        if (!initializedWithSocket) {
+                            $.ajax({
+                                url: '/game/move',
+                                method: 'PATCH',
+                                data: {
+                                    id: val.id,
+                                    x: $cellUnderCursor.data('x'),
+                                    y: $cellUnderCursor.data('y'),
+                                    _token: "{{ csrf_token() }}"
+                                },
+                                success: response => {
+                                    if (response.length !== 0)
+                                        $cellUnderCursor.html(this);
+                                },
+                                error: response => {
+
+                                },
+                                complete: response => {
+                                    $(this).attr('style', '');
+                                    ['background_kill', 'background_move', 'background_self'].forEach(val => {
+                                        $(`.${val}`).removeClass(val).removeClass(val+"__hover");
+                                    });
+                                }
+                            });
+                        } else {
+                            socket.send(JSON.stringify({
+                                type: 'move',
                                 id: val.id,
-                                type: val.type,
                                 x: $cellUnderCursor.data('x'),
                                 y: $cellUnderCursor.data('y'),
-                                _token: "{{ csrf_token() }}"
-                            },
-                            success: response => {
-                                if (response.length !== 0)
-                                    $cellUnderCursor.html(this);
-                            },
-                            error: response => {
-
-                            },
-                            complete: response => {
-                                $(this).attr('style', '');
-                                ['background_kill', 'background_move', 'background_self'].forEach(val => {
-                                    $(`.${val}`).removeClass(val).removeClass(val+"__hover");
-                                });
-                            }
-                        });
+                                game_id: "{{ $game->id }}",
+                                user_id: "{{ Auth::id() }}"
+                            }));
+                        }
                     }
                 });
             });
         }
-
-        fetch('/game/start')
-            .then(r => r.json())
-            .then(r => initGame(r));
 
         $('body').delegate('.field', 'mousemove', function(event) {
             let $cellUnderCursor = $(document.elementsFromPoint(event.pageX, event.pageY)).filter('.cell').first();
@@ -193,12 +259,24 @@
 @section('content')
 <div class="container">
     <div class="row justify-content-center">
-        <div class="col-md-8">
+        <div class="col-md-12 d-flex justify-content-between">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">Игры <a href="{{ route('chess') }}" class="btn btn-outline-success btn-sm">Новая</a></div>
+                <div class="card-body" style="width: 250px; height: 600px; overflow-y: auto">
+                    <nav class="nav nav-pills nav-justified justify-content-center">
+                        @foreach ($games as $gameNavItem)
+                            <div class="w-100 text-center">
+                                <a class="nav-link mb-2 @if($gameNavItem->id == $game->id) active @endif" href="{{ route('chess', ['id'=>$gameNavItem->id]) }}">Игра #{{ $gameNavItem->id }}</a>
+                            </div>
+                        @endforeach
+                    </nav>
+                </div>
+            </div>
             <div class="card">
                 <div class="card-header">Шахматы</div>
 
                 <div class="card-body">
-                    <div id="field" class="d-flex justify-content-center">
+                    <div id="field" class="d-flex justify-content-center" style="min-width: 640px">
 
                     </div>
                 </div>

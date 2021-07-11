@@ -6,6 +6,7 @@ use App\Classes\GameObjectInterface;
 use App\Classes\GameRules;
 use App\Models\Piece as ModelsPiece;
 use Exception;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use ReflectionClass;
 
@@ -39,6 +40,10 @@ abstract class Piece implements GameObjectInterface {
             'type' => (new ReflectionClass($this))->getShortName()
         ]);
 
+        return $this->getExportData();
+    }
+
+    public function getExportData() : array {
         $pieceExportData = array_intersect_key($this->model->toArray(), array_flip(['id', 'pos_x', 'pos_y', 'color', 'type']));
         $pieceExportData['image'] = $this->getImage();
 
@@ -142,9 +147,16 @@ abstract class Piece implements GameObjectInterface {
             return 0;
         };
 
-        foreach([1, -1] as $i) {
-            if ($this->checkHasPiecesAtCell($enemyPieces, $king->pos_x + $i, $king->pos_y+1, ['Queen', 'King', 'Pawn', 'Bishop']))
-                return true;
+        if ($king->color == Piece::COLOR_WHITE) {
+            foreach([1, -1] as $i) {
+                if ($this->checkHasPiecesAtCell($enemyPieces, $king->pos_x + $i, $king->pos_y+1, ['Queen', 'King', 'Pawn', 'Bishop']))
+                    return true;
+            }
+        } else {
+            foreach([1, -1] as $i) {
+                if ($this->checkHasPiecesAtCell($enemyPieces, $king->pos_x + $i, $king->pos_y-1, ['Queen', 'King', 'Pawn', 'Bishop']))
+                    return true;
+            }
         }
 
         for($i=$king->pos_x+1;$i<$this->getGameRules()->getFieldLength()+1;$i++) {
@@ -222,6 +234,9 @@ abstract class Piece implements GameObjectInterface {
             'pos_y' => $data['posY']
         ]);
 
+        $this->model->game->update([
+            'turn' => $this->model->game->turn == Piece::COLOR_WHITE ? Piece::COLOR_BLACK : Piece::COLOR_WHITE
+        ]);
 
         $this->model->fresh();
 

@@ -6,6 +6,7 @@ use App\Models\Game as ModelsGame;
 use App\Models\Piece as ModelsPiece;
 use App\Pieces\Piece;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 
 class Chess implements GameInterface {
     private ModelsGame $model;
@@ -13,7 +14,7 @@ class Chess implements GameInterface {
     private array $gameObjects = [];
     protected GameRules $gameRules;
 
-    public function startGame(int $user_1, int $user_2, GameRules $gameRules): JsonResponse
+    public function startGame(int $user_1, int $user_2, GameRules $gameRules): array
     {
         $this->users[Piece::COLOR_WHITE] = $user_1;
         $this->users[Piece::COLOR_BLACK] = $user_2;
@@ -21,21 +22,27 @@ class Chess implements GameInterface {
         $this->gameRules = $gameRules;
 
         $this->initModel();
-        return response()->json($this->initGameObjects());
+        return $this->initGameObjects();
     }
 
-    public function getMoves(int $objectId, array $data): JsonResponse
+    public function getMoves(int $objectId, array $data): array
     {
         $model = ModelsPiece::find($objectId);
 
-        return response()->json((new ("App\\Pieces\\" . $model->type)($model))->getMoves());
+        if ($model->user_id != Auth::id() || $model->game->turn != $model->game->users->where('id', Auth::id())->first()->pivot->color)
+            return [];
+
+        return (new ("App\\Pieces\\" . $model->type)($model))->getMoves();
     }
 
-    public function updateObject(int $objectId, array $data): JsonResponse
+    public function updateObject(int $objectId, array $data): array
     {
         $model = ModelsPiece::find($objectId);
 
-        return response()->json((new ("App\\Pieces\\" . $model->type)($objectId))->update($data));
+        if ($model->user_id != Auth::id() || $model->game->turn != $model->game->users->where('id', Auth::id())->first()->pivot->color)
+            return [];
+
+        return (new ("App\\Pieces\\" . $model->type)($objectId))->update($data);
     }
 
     public function finishGame(): JsonResponse
@@ -51,10 +58,16 @@ class Chess implements GameInterface {
     private function initModel() : ModelsGame
     {
         $this->model = ModelsGame::create([
-            'type' => $this->gameRules->getID()
+            'type' => $this->gameRules->getID(),
+            'turn' => Piece::COLOR_WHITE
         ]);
 
-        $this->model->users()->sync($this->users);
+        $users = [];
+        foreach($this->users as $color=>$user_id) {
+            $users[$user_id] = ['color' => $color];
+        }
+
+        $this->model->users()->sync($users);
 
         return $this->model;
     }
@@ -74,6 +87,15 @@ class Chess implements GameInterface {
             }
         }
 
+        return $this->gameObjects;
+    }
+
+    public function getGameObjects($game_id) : array
+    {
+        $pieces = ModelsPiece::where('game_id', $game_id)->get();
+        foreach($pieces as $piece) {
+            $this->gameObjects[] = (new ("App\\Pieces\\" . $piece->type)($piece))->getExportData();
+        }
         return $this->gameObjects;
     }
 }

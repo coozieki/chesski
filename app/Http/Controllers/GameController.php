@@ -4,7 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Classes\Chess;
 use App\Classes\OrdinaryGameRules;
+use App\Models\Game;
+use App\Models\Piece;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class GameController extends Controller
 {
@@ -20,9 +24,20 @@ class GameController extends Controller
         $this->middleware('auth');
     }
 
-    public function home()
+    public function chess($id = null)
     {
-        return view('home');
+        $game = null;
+        if ($id)
+            $game = Game::find($id);
+        else {
+            $game = new ($this->currentGame)();
+            $gameObjects = $game->startGame(1, 4, new OrdinaryGameRules());
+            $game = Piece::find($gameObjects[0]['id'])->game;
+        }
+        $games = Game::whereHas('users', function(EloquentBuilder $query) {
+            $query->where('users.id', Auth::id());
+        })->get();
+        return view('home', compact('game', 'games'));
     }
 
     /**
@@ -33,18 +48,18 @@ class GameController extends Controller
     public function start()
     {
         $game = new ($this->currentGame)();
-        return $game->startGame(1, 2, new OrdinaryGameRules());
+        return response()->json($game->startGame(1, 4, new OrdinaryGameRules()));
     }
 
     public function move(Request $request)
     {
         $game = new ($this->currentGame)();
-        return $game->updateObject($request->id, ['posX' => $request->x, 'posY' => $request->y]);
+        return response()->json($game->updateObject($request->id, ['posX' => $request->x, 'posY' => $request->y]));
     }
 
     public function getMoves(Request $request)
     {
         $game = new ($this->currentGame)();
-        return $game->getMoves($request->id, []);
+        return response()->json($game->getMoves($request->id, []));
     }
 }
