@@ -67,8 +67,8 @@ The Laravel framework is open-sourced software licensed under the [MIT license](
 The project is based on php 8, laravel 8 using php sockets extension.
 What opportunities does the project provide:
 
-- support for ajax connections in the rare case that the browser does not support socket technology
-- the ability to choose and customize your own skins for figures
-- create your own game rules with the choice of the initial position of the pieces and the size of the field
-- little time to add new types of turn-based games
-
+- Holding several games at the same time
+- Support for ajax connections in the rare case that the browser does not support socket technology
+- The ability to choose and customize your own skins for figures
+- Create your own game rules with the choice of the initial position of the pieces and the size of the field
+- Little time to add new types of turn-based games
