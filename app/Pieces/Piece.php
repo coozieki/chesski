@@ -74,6 +74,10 @@ abstract class Piece implements GameObjectInterface {
     private function isCheck($pieces, array $move) : bool {
         $enemyPieces = [];
         foreach($pieces as $index=>$piece) {
+            if ($piece->pos_x == $move['x'] && $piece->pos_y == $move['y']) {
+                unset($pieces[$index]);
+                continue;
+            }
             if ($piece->id == $this->model->id) {
                 $pieces[$index]->pos_x = $move['x'];
                 $pieces[$index]->pos_y = $move['y'];
@@ -146,7 +150,6 @@ abstract class Piece implements GameObjectInterface {
 
             return 0;
         };
-
         if ($king->color == Piece::COLOR_WHITE) {
             foreach([1, -1] as $i) {
                 if ($this->checkHasPiecesAtCell($enemyPieces, $king->pos_x + $i, $king->pos_y+1, ['Queen', 'King', 'Pawn', 'Bishop']))

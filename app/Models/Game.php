@@ -14,6 +14,6 @@ class Game extends Model
     ];
 
     public function users() {
-        return $this->belongsToMany(User::class)->withPivot(['color']);
+        return $this->belongsToMany(User::class)->withPivot(['color', 'ip']);
     }
 }

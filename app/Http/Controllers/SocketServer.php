@@ -6,8 +6,13 @@ use App\Classes\Chess;
 use App\Models\Game;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class SocketServer {
+
+    protected string $address = '127.0.0.1';
+    protected int $port = 8090;
     protected string $currentGame = Chess::class;
 
     public function sendHeaders($headersText, $socket, $host, $port) {
@@ -84,14 +89,21 @@ class SocketServer {
 
     public function send($message, $clientSocketArray) {
         foreach($clientSocketArray as $clientSocket) {
-            @socket_write($clientSocket, $message, strlen($message));
+            @socket_getpeername($clientSocket, $clientIpAddress, $clientPort);
+            if ($message->receivers != [] && array_search([
+                'address' => $clientIpAddress,
+                'port' => $clientPort
+            ], $message->receivers) === false)
+                continue;
+            @socket_write($clientSocket, $message->message, strlen($message->message));
         }
 
         return true;
     }
 
-    public function response($message) {
+    public function response($message, $clientIpAddress, $clientPort) {
         $response = null;
+        $receivers = [];
         if ($message === null)
             return null;
         $game = new ($this->currentGame)();
@@ -101,10 +113,16 @@ class SocketServer {
         }
         switch($message->type) {
             case 'init': {
+                DB::table('game_user')->where('user_id', $message->user_id)->whereNotNull('ip')->update(['ip'=>null]);
+                DB::table('game_user')->where('user_id', $message->user_id)->where('game_id', $message->game_id)->update(['ip'=>$clientIpAddress . ':' . $clientPort]);
                 $data = $game->getGameObjects($message->game_id);
                 $response = [
                     'type' => 'init',
                     'data' => $data
+                ];
+                $receivers[] = [
+                    'address' => $clientIpAddress,
+                    'port' => $clientPort
                 ];
                 break;
             }
@@ -112,6 +130,10 @@ class SocketServer {
                 $response = [
                     'type' => 'get_moves',
                     'data' => $game->getMoves($message->id, [])
+                ];
+                $receivers[] = [
+                    'address' => $clientIpAddress,
+                    'port' => $clientPort
                 ];
                 break;
             }
@@ -122,17 +144,23 @@ class SocketServer {
                     'type' => 'update',
                     'data' => $data
                 ];
+                $players = DB::table('game_user')->where('game_id', $message->game_id)->whereNotNull('ip')->get();
+                foreach($players as $player)
+                    $receivers[] = [
+                        'address' => Str::before($player->ip, ':'),
+                        'port' => Str::after($player->ip, ':')
+                    ];
                 break;
             }
         }
 
-        return $this->seal(json_encode($response));
+        return (object)[
+            'receivers' =>  $receivers,
+            'message' => $this->seal(json_encode($response))
+        ];
     }
 
     public function init() {
-
-        $address = '127.0.0.1';
-        $port = 8090;
 
         if (($sock = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)) === false) {
             echo "Не удалось выполнить socket_create(): причина: " . socket_strerror(socket_last_error()) . "\n";
@@ -140,7 +168,7 @@ class SocketServer {
 
         socket_set_option($sock, SOL_SOCKET, SO_REUSEADDR, 1);
 
-        if (socket_bind($sock, $address, $port) === false) {
+        if (socket_bind($sock, $this->address, $this->port) === false) {
             echo "Не удалось выполнить socket_bind(): причина: " . socket_strerror(socket_last_error($sock)) . "\n";
         }
 
@@ -164,7 +192,7 @@ class SocketServer {
                 $clientSocketArray[] = $newSocket;
 
                 $header = socket_read($newSocket, 1024);
-                $this->sendHeaders($header, $newSocket, $address, $port);
+                $this->sendHeaders($header, $newSocket, $this->address, $this->port);
 
                 $newSocketArrayIndex = array_search($sock, $newSocketArray);
                 unset($newSocketArray[$newSocketArrayIndex]);
@@ -175,7 +203,9 @@ class SocketServer {
                     $socketMessage = $this->unseal($socketData);
                     $messageObj = json_decode($socketMessage);
 
-                    $message = $this->response($messageObj);
+                    socket_getpeername($newSocketArrayResource, $clientIpAddress, $clientPort);
+
+                    $message = $this->response($messageObj, $clientIpAddress, $clientPort);
 
                     if ($message !== null)
                         $this->send($message, $clientSocketArray);

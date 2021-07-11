@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Classes\Chess;
+use App\Classes\ExtraordinaryGameRules;
+use App\Classes\GameRules;
 use App\Classes\OrdinaryGameRules;
 use App\Models\Game;
 use App\Models\Piece;
+use Exception;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,20 +27,32 @@ class GameController extends Controller
         $this->middleware('auth');
     }
 
-    public function chess($id = null)
+    public function chess(Request $request, $id = null)
     {
         $game = null;
-        if ($id)
+        if ($id) {
             $game = Game::find($id);
+            if (!$game)
+                abort(404);
+            $gameRules = GameRules::getInstanceByTypeName($game->type);
+        }
         else {
             $game = new ($this->currentGame)();
-            $gameObjects = $game->startGame(1, 4, new OrdinaryGameRules());
+            if ($request->type) {
+                try {
+                    $gameRules = GameRules::getInstanceByTypeName($request->type);
+                } catch (Exception $e) {
+                    $gameRules = new OrdinaryGameRules();
+                }
+            } else
+                $gameRules = new OrdinaryGameRules();
+            $gameObjects = $game->startGame(1, 4, $gameRules);
             $game = Piece::find($gameObjects[0]['id'])->game;
         }
         $games = Game::whereHas('users', function(EloquentBuilder $query) {
             $query->where('users.id', Auth::id());
         })->get();
-        return view('home', compact('game', 'games'));
+        return view('home', compact('game', 'games', 'gameRules'));
     }
 
     /**

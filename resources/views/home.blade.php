@@ -6,19 +6,38 @@
             margin: 0;
         }
 
+        .field {
+            display: flex;
+            flex-direction: column;
+        }
+
         .field .cell {
-            width: 80px;
-            height: 80px;
+            flex: 1 1;
+            height: 4vw;
+            width: 4vw;
             border-bottom: 1px solid black;
             border-right: 1px solid black;
             cursor: pointer;
         }
 
-        .field .row:nth-child(even) .cell:nth-child(odd) {
+        @media(max-width: 900px) {
+
+            .field .cell {
+                height: 6vw;
+                width: 6vw;
+            }
+        }
+
+        .field .field_row {
+            display: flex;
+            flex-grow: 1;
+        }
+
+        .field .field_row:nth-child(even) .cell:nth-child(odd) {
             background-color: #00000033
         }
 
-        .field .row:nth-child(odd) .cell:nth-child(even) {
+        .field .field_row:nth-child(odd) .cell:nth-child(even) {
             background-color: #00000033
         }
 
@@ -78,6 +97,7 @@
 @push('js')
     <script>
         var socket;
+        var fieldLength = Number("{{ $gameRules->getFieldLength() }}");
         var game_id = Number("{{ $game?->id ?: 0 }}");
         var initializedWithSocket = false;
         var currentDraggable;
@@ -86,11 +106,11 @@
             socket = new WebSocket("ws://127.0.0.1:8090");
 
             socket.onopen = () => {
-                console.log('Соединение установлено');
                 initializedWithSocket = true;
                 socket.send(JSON.stringify({
                     type: 'init',
-                    game_id: game_id
+                    game_id: game_id,
+                    user_id: "{{ Auth::id() }}"
                 }));
             }
 
@@ -141,11 +161,11 @@
             $('.field').remove();
             let $table = $(`<div class="field"></div>`);
             let $tr;
-            for(let j=0; j<8; j++) {
-                $tr = $(`<div class="row${j == 0 ? ' border-top' : ''}"></div>`);
-                for(let i=0; i<8; i++) {
+            for(let j=0; j<fieldLength; j++) {
+                $tr = $(`<div class="field_row${j == 0 ? ' border-top' : ''}"></div>`);
+                for(let i=0; i<fieldLength; i++) {
                     $tr.append($(`
-                        <div class="cell${i == 0 ? ' border-left' : ''}" data-x="${i+1}" data-y="${8-j}">
+                        <div class="cell${i == 0 ? ' border-left' : ''}" data-x="${i+1}" data-y="${fieldLength-j}">
                         </div>
                     `));
                 }
@@ -163,8 +183,9 @@
                 `);
                 $(`img`, $cell).attr('src', val.image);
 
+                let width = $('.piece_img_container').first().width();
                 $('.piece_img_container', $cell).draggable({
-                    cursorAt: {left: 40, top: 40},
+                    cursorAt: {left: width/2, top: width/2},
                     start: function(event, ui) {
                         currentDraggable = this;
                         $(this).css('z-index', '1000');
@@ -197,7 +218,7 @@
                     },
                     stop: function(event, ui) {
                         $(this).css('z-index', '100');
-                        let $cellUnderCursor = $(document.elementsFromPoint(event.pageX, event.pageY)).filter('.cell').first();
+                        let $cellUnderCursor = $(document.elementsFromPoint(event.pageX, event.pageY - $(document).scrollTop())).filter('.cell').first();
                         if (!$cellUnderCursor.length) {
                             $(this).attr('style', '');
                                 ['background_kill', 'background_move', 'background_self'].forEach(val => {
@@ -246,38 +267,45 @@
         }
 
         $('body').delegate('.field', 'mousemove', function(event) {
-            let $cellUnderCursor = $(document.elementsFromPoint(event.pageX, event.pageY)).filter('.cell').first();
+            let $cellUnderCursor = $(document.elementsFromPoint(event.pageX, event.pageY - $(document).scrollTop())).filter('.cell').first();
             ['background_move', 'background_kill', 'background_self'].forEach(val => {
                 $(`.${val}__hover`).removeClass(`${val}__hover`);
                 if ($cellUnderCursor.hasClass(val))
                     $cellUnderCursor.addClass(`${val}__hover`);
             });
         });
+
+        $(window).on('resize', function() {
+            let width = $('.piece_img_container').width();
+            $( '.piece_img_container' ).draggable( "option", "cursorAt", { left: width/2 } );
+        })
     </script>
 @endpush
 
 @section('content')
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-12 d-flex justify-content-between">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">Игры <a href="{{ route('chess') }}" class="btn btn-outline-success btn-sm">Новая</a></div>
-                <div class="card-body" style="width: 250px; height: 600px; overflow-y: auto">
-                    <nav class="nav nav-pills nav-justified justify-content-center">
-                        @foreach ($games as $gameNavItem)
-                            <div class="w-100 text-center">
-                                <a class="nav-link mb-2 @if($gameNavItem->id == $game->id) active @endif" href="{{ route('chess', ['id'=>$gameNavItem->id]) }}">Игра #{{ $gameNavItem->id }}</a>
-                            </div>
-                        @endforeach
-                    </nav>
+<div>
+    <div class="row justify-content-center no-gutters">
+        <div class="col-md-12 justify-content-between">
+            <div class="row no-gutters justify-content-between px-3">
+                <div class="col-lg-3 card order-1 order-lg-0">
+                    <div class="card-header d-flex justify-content-between align-items-center">Игры <button data-toggle="modal" data-target="#create_modal" class="btn btn-outline-success btn-sm">Новая</button></div>
+                    <div class="card-body" style="max-height: 300px; overflow-y: auto">
+                        <nav class="nav nav-pills nav-justified justify-content-center">
+                            @foreach ($games as $gameNavItem)
+                                <div class="w-100 text-center">
+                                    <a class="nav-link mb-2 @if($gameNavItem->id == $game->id) active @endif" href="{{ route('chess', ['id'=>$gameNavItem->id]) }}">Игра #{{ $gameNavItem->id }}</a>
+                                </div>
+                            @endforeach
+                        </nav>
+                    </div>
                 </div>
-            </div>
-            <div class="card">
-                <div class="card-header">Шахматы</div>
+                <div class="col-lg-8 card order-0 order-lg-1 mb-4 mb-lg-0">
+                    <div class="card-header">Шахматы</div>
 
-                <div class="card-body">
-                    <div id="field" class="d-flex justify-content-center" style="min-width: 640px">
+                    <div class="card-body">
+                        <div id="field" class="d-flex justify-content-center">
 
+                        </div>
                     </div>
                 </div>
             </div>
@@ -285,3 +313,7 @@
     </div>
 </div>
 @endsection
+
+@push('modals')
+    @include('create_game_modal')
+@endpush
