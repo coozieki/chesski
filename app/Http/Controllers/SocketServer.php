@@ -113,12 +113,14 @@ class SocketServer {
         }
         switch($message->type) {
             case 'init': {
-                DB::table('game_user')->where('user_id', $message->user_id)->whereNotNull('ip')->update(['ip'=>null]);
                 DB::table('game_user')->where('user_id', $message->user_id)->where('game_id', $message->game_id)->update(['ip'=>$clientIpAddress . ':' . $clientPort]);
                 $data = $game->getGameObjects($message->game_id);
                 $response = [
                     'type' => 'init',
-                    'data' => $data
+                    'data' => [
+                        'pieces' => $data,
+                        'game' => $message->game_id
+                    ]
                 ];
                 $receivers[] = [
                     'address' => $clientIpAddress,
@@ -129,7 +131,10 @@ class SocketServer {
             case 'get_moves': {
                 $response = [
                     'type' => 'get_moves',
-                    'data' => $game->getMoves($message->id, [])
+                    'data' => [
+                        'pieces' => $game->getMoves($message->id, []),
+                        'game' => $message->game_id
+                    ]
                 ];
                 $receivers[] = [
                     'address' => $clientIpAddress,
@@ -142,7 +147,10 @@ class SocketServer {
                 $data = $game->getGameObjects($message->game_id);
                 $response = [
                     'type' => 'update',
-                    'data' => $data
+                    'data' => [
+                        'game' => $message->game_id,
+                        'pieces' => $data
+                    ]
                 ];
                 $players = DB::table('game_user')->where('game_id', $message->game_id)->whereNotNull('ip')->get();
                 foreach($players as $player)
@@ -201,6 +209,7 @@ class SocketServer {
             foreach ($newSocketArray as $newSocketArrayResource) {
                 while(@socket_recv($newSocketArrayResource, $socketData, 1024, 0) >= 1) {
                     $socketMessage = $this->unseal($socketData);
+                    echo $socketMessage . "\n";
                     $messageObj = json_decode($socketMessage);
 
                     socket_getpeername($newSocketArrayResource, $clientIpAddress, $clientPort);

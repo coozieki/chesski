@@ -11,6 +11,16 @@
             flex-direction: column;
         }
 
+        #field {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        #field .field {
+            flex-basis: 50%;
+            margin-bottom: 30px;
+        }
+
         .field .cell {
             flex: 1 1;
             height: 4vw;
@@ -93,14 +103,14 @@
         }
     </style>
 @endpush
-
+{{--
 @push('js')
     <script>
         var socket;
-        var fieldLength = Number("{{ $gameRules->getFieldLength() }}");
         var game_id = Number("{{ $game?->id ?: 0 }}");
         var initializedWithSocket = false;
         var currentDraggable;
+        var fieldLength = 8;
 
         $(document).ready(function() {
             socket = new WebSocket("ws://127.0.0.1:8090");
@@ -279,32 +289,302 @@
             let width = $('.piece_img_container').width();
             $( '.piece_img_container' ).draggable( "option", "cursorAt", { left: width/2 } );
         })
+
+        const app = {
+            data() {
+                return {
+                    fieldLength: Number("{{ $gameRules->getFieldLength() }}")
+                }
+            }
+        };
+
+        Vue.createApp(app).mount('#app');
+    </script>
+@endpush --}}
+
+@push('js')
+    <script>
+        const app = {
+            data() {
+                return {
+                    fieldLength: Number("{{ $gameRules->getFieldLength() }}"),
+                    pieces: {
+                    },
+                    initializedWithSocket: false,
+                    socket: null,
+                    game_id: [84, 85, 86, 87],
+                    currentDraggable: null,
+                    key: 0,
+                    games: {},
+                    queue: []
+                }
+            },
+            created() {
+                this.socket = new WebSocket("ws://127.0.0.1:8090");
+
+                this.socket.onopen = () => {
+                    this.initializedWithSocket = true;
+                    this.socket.send(JSON.stringify({
+                        type: 'init',
+                        game_id: this.game_id[0],
+                        user_id: "{{ Auth::id() }}"
+                    }));
+                    this.game_id.forEach(val => {
+                        this.queue.push(JSON.stringify({
+                            type: 'init',
+                            game_id: val,
+                            user_id: "{{ Auth::id() }}"
+                        }));
+                    });
+                }
+
+                this.socket.onerror = () => {
+                    if (!this.initializedWithSocket)
+                        fetch('/game/start')
+                            .then(r => r.json())
+                            .then(r => initGame(r));
+                }
+
+                this.socket.onclose = () => {
+                    console.log('Соединение закрыто');
+                }
+                this.socket.onmessage = (event) => {
+                    var data = JSON.parse(event.data);
+                    if (!data)
+                        return;
+                    if (data.type == 'update' || data.type == 'init') {
+                        this.initGame(data.data);
+                        if (this.queue.length > 0) {
+                            this.socket.send(this.queue.pop());
+                        }
+                    } else if (data.type == 'get_moves') {
+                        if (data.type == 'get_moves') {
+                            this.showMoves(data.data.game, data.data.pieces);
+                            this.showSelfCell(data.data.game);
+                        }
+                    }
+                }
+            },
+            updated() {
+                this.bindDraggale();
+            },
+            methods: {
+                initGame(r) {
+                    this.games[r.game] = {};
+                    let pieces;
+                    this.games[r.game].pieces = {};
+                    r.pieces.forEach(val => {
+                        if (this.games[r.game].pieces[val.pos_y] === undefined)
+                            this.games[r.game].pieces[val.pos_y] = {};
+
+                        this.games[r.game].pieces[val.pos_y][val.pos_x] = {
+                            image: val.image,
+                            type: val.type,
+                            id: val.id
+                        }
+                    });
+                    this.key += 1;
+                },
+                setCell(game, y, x, val) {
+                    let pieces = this.games[game].pieces;
+                    pieces[y] = pieces[y] || {};
+                    pieces[y][x] = val;
+                },
+                getCell(game, y, x) {
+                    let result = undefined;
+                    let pieces = this.games[game].pieces;
+                    if (pieces[y] !== undefined && pieces[y][x] !== undefined)
+                        result = pieces[y][x];
+
+                    return result;
+                },
+                cellHasPiece(game, y, x) {
+                    let result = false;
+                    let pieces = this.games[game].pieces;
+                    if (pieces[y] !== undefined && pieces[y][x] !== undefined)
+                        result = pieces[y][x].image !== undefined;
+
+                    return result;
+                },
+                showMoves(game, data) {
+                    let pieces = this.games[game].pieces;
+                    data = Object.values(data);
+                    data.forEach(val => {
+                        if (pieces[val.y] !== undefined && pieces[val.y][val.x] !== undefined)
+                            pieces[val.y][val.x].back_kill = true;
+                        else
+                            this.setCell(game, val.y, val.x, {back_move: true});
+                    });
+                },
+                showSelfCell(game, element) {
+                    this.games[game].pieces[this.currentDraggable.y][this.currentDraggable.x].back_self = true;
+                },
+                hasBack(game, y, x, back) {
+                    let result = false;
+
+                    let cell = this.getCell(game, y, x);
+                    if (cell !== undefined && cell[`back_${back}`] !== undefined)
+                        result = true;
+
+                    return result;
+                },
+                bindDraggale() {
+                    for (let game in this.games) {
+                        let pieces = this.games[game].pieces;
+                        for (let pos_y in pieces) {
+                            for (let pos_x in pieces[pos_y]) {
+                                let val = pieces[pos_y][pos_x];
+                                let vue = this;
+
+                                let width = $('.piece_img_container', $(`.cell[data-x="${pos_x}"][data-y="${pos_y}"]`)).width();
+                                $('.piece_img_container', $(`.field[data-game="${game}"] .cell[data-x="${pos_x}"][data-y="${pos_y}"]`)).draggable({
+                                    cursorAt: {left: width/2, top: width/2},
+                                    start: function(event, ui) {
+                                        vue.currentDraggable = {
+                                            x: pos_x,
+                                            y: pos_y
+                                        };
+                                        $(this).css('z-index', '1000');
+                                        if (!vue.initializedWithSocket) {
+                                            $.ajax({
+                                                url: '/game/moves',
+                                                method: 'GET',
+                                                data: {
+                                                    id: val.id,
+                                                    type: val.type,
+                                                    _token: "{{ csrf_token() }}"
+                                                },
+                                                success: response => {
+                                                    showMoves(response);
+                                                },
+                                                error: response => {
+
+                                                },
+                                                complete: response => {
+                                                    showSelfCell(this);
+                                                }
+                                            });
+                                        } else {
+                                            vue.socket.send(JSON.stringify({
+                                                'type': 'get_moves',
+                                                'id': val.id,
+                                                user_id: "{{ Auth::id() }}",
+                                                game_id: game
+                                            }));
+                                        }
+                                    },
+                                    stop: function(event, ui) {
+                                        $(this).css('z-index', '100');
+                                        let $cellUnderCursor = $(document.elementsFromPoint(event.pageX, event.pageY - $(document).scrollTop())).filter('.cell').first();
+                                        if (!$cellUnderCursor.length) {
+                                            $(this).attr('style', '');
+                                            ['background_kill', 'background_move', 'background_self'].forEach(val => {
+                                                $(`.${val}`).removeClass(val).removeClass(val+"__hover");
+                                            });
+                                            return;
+                                        }
+
+                                        if (!vue.initializedWithSocket) {
+                                            $.ajax({
+                                                url: '/game/move',
+                                                method: 'PATCH',
+                                                data: {
+                                                    id: val.id,
+                                                    x: $cellUnderCursor.data('x'),
+                                                    y: $cellUnderCursor.data('y'),
+                                                    game_id: game,
+                                                    _token: "{{ csrf_token() }}"
+                                                },
+                                                success: response => {
+                                                    if (response.length !== 0)
+                                                        $cellUnderCursor.html(this);
+                                                },
+                                                error: response => {
+
+                                                },
+                                                complete: response => {
+                                                    $(this).attr('style', '');
+                                                    ['background_kill', 'background_move', 'background_self'].forEach(val => {
+                                                        $(`.${val}`).removeClass(val).removeClass(val+"__hover");
+                                                    });
+                                                }
+                                            });
+                                        } else {
+                                            vue.socket.send(JSON.stringify({
+                                                type: 'move',
+                                                id: val.id,
+                                                x: $cellUnderCursor.data('x'),
+                                                y: $cellUnderCursor.data('y'),
+                                                game_id: game,
+                                                user_id: "{{ Auth::id() }}"
+                                            }));
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        Vue.createApp(app).mount('#app');
+
+        $('body').delegate('.field', 'mousemove', function(event) {
+            let $cellUnderCursor = $(document.elementsFromPoint(event.pageX, event.pageY - $(document).scrollTop())).filter('.cell').first();
+            ['background_move', 'background_kill', 'background_self'].forEach(val => {
+                $(`.${val}__hover`).removeClass(`${val}__hover`);
+                if ($cellUnderCursor.hasClass(val))
+                    $cellUnderCursor.addClass(`${val}__hover`);
+            });
+        });
+
+        $(window).on('resize', function() {
+            let width = $('.piece_img_container').width();
+            $( '.piece_img_container' ).draggable( "option", "cursorAt", { left: width/2 } );
+        })
     </script>
 @endpush
 
 @section('content')
-<div>
-    <div class="row justify-content-center no-gutters">
-        <div class="col-md-12 justify-content-between">
-            <div class="row no-gutters justify-content-between px-3">
-                <div class="col-lg-3 card order-1 order-lg-0">
-                    <div class="card-header d-flex justify-content-between align-items-center">Игры <button data-toggle="modal" data-target="#create_modal" class="btn btn-outline-success btn-sm">Новая</button></div>
-                    <div class="card-body" style="max-height: 300px; overflow-y: auto">
-                        <nav class="nav nav-pills nav-justified justify-content-center">
-                            @foreach ($games as $gameNavItem)
-                                <div class="w-100 text-center">
-                                    <a class="nav-link mb-2 @if($gameNavItem->id == $game->id) active @endif" href="{{ route('chess', ['id'=>$gameNavItem->id]) }}">Игра #{{ $gameNavItem->id }}</a>
-                                </div>
-                            @endforeach
-                        </nav>
-                    </div>
+<div class="row justify-content-center no-gutters" id="app">
+    <div class="col-md-12 justify-content-between">
+        <div class="row no-gutters justify-content-between px-3">
+            <div class="col-lg-3 card order-1 order-lg-0">
+                <div class="card-header d-flex justify-content-between align-items-center">Игры <button data-toggle="modal" data-target="#create_modal" class="btn btn-outline-success btn-sm">Новая</button></div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto">
+                    <nav class="nav nav-pills nav-justified justify-content-center">
+                        @foreach ($games as $gameNavItem)
+                            <div class="w-100 text-center">
+                                <a class="nav-link mb-2 @if($gameNavItem->id == $game->id) active @endif" href="{{ route('chess', ['id'=>$gameNavItem->id]) }}">Игра #{{ $gameNavItem->id }}</a>
+                            </div>
+                        @endforeach
+                    </nav>
                 </div>
-                <div class="col-lg-8 card order-0 order-lg-1 mb-4 mb-lg-0">
-                    <div class="card-header">Шахматы</div>
+            </div>
+            <div class="col-lg-8 card order-0 order-lg-1 mb-4 mb-lg-0">
+                <div class="card-header" @click="fieldLength = 3">Шахматы</div>
 
-                    <div class="card-body">
-                        <div id="field" class="d-flex justify-content-center">
-
+                <div class="card-body">
+                    <div id="field" class="d-flex justify-content-center">
+                        <div class="field" v-for="(val,game_id) in games" :data-game="game_id" key="key">
+                            <div v-for="i in fieldLength" :key="key" :class="{'field_row': true, 'border-top': i==1}">
+                                <div v-for="j in fieldLength"
+                                    :key="key"
+                                    :data-x="j"
+                                    :data-y="fieldLength - i + 1"
+                                    :class="{'cell': true,
+                                             'border-left': j==1,
+                                             'background_self': hasBack(game_id, fieldLength - i + 1, j, 'self'),
+                                             'background_kill': hasBack(game_id, fieldLength - i + 1, j, 'kill'),
+                                             'background_move': hasBack(game_id, fieldLength - i + 1, j, 'move')
+                                            }">
+                                    <div :key="key" class="piece_img_container" v-if="cellHasPiece(game_id, fieldLength - i + 1, j)">
+                                        <img :src="games[game_id].pieces[fieldLength - i + 1][j].image">
+                                        <div class="piece_img_container__block"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
